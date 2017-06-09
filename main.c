@@ -106,13 +106,19 @@ int main(int argc, char *argv[])
            fr, nfr);
     free(bitmap);
 
+    int inodes[super.s_inodes_count * 15];
+    int block[super.s_inodes_count * 15];
+    struct ext2_inode inodeValuesfrag[super.s_inodes_count * 15];
+    int fd_block[super.s_inodes_count * 15];
+
     struct ext2_inode inode;
     int j;
+    int count = 0;
     printf("The number of nodes per group is %u and size of each node is %u\n\n", super.s_inodes_per_group, super.s_inode_size);
     for (j = 11; j < super.s_inodes_count; j++)
     {
         int group_no = j / num_inodes_per_group;
-        printf("group #%d; table %d\n", group_no, group[group_no].bg_inode_table);
+        // printf("group #%d; table %d\n", group_no, group[group_no].bg_inode_table);
         lseek(fd, BLOCK_OFFSET(group[group_no].bg_inode_table) + (sizeof(struct ext2_inode) * j), SEEK_SET);
         read(fd, &inode, sizeof(struct ext2_inode));
         printf("\nThe size of the %u innode is %d\n", j, inode.i_size);
@@ -132,56 +138,28 @@ int main(int argc, char *argv[])
                 printf("Double   : %u\n", inode.i_block[i]);
             else if (i == 14) // triple indirect block
                 printf("Triple   : %u\n", inode.i_block[i]);
+            if (inode.i_block[i] > 0)
+            {
+                // printf("%u %u\n", j + 1, inode.i_block[i]);
+                inodes[count] = j; // the inode
+                block[count] = i;  // the  block in the inode
+                // inodeValuesfrag[count]=inode;
+                fd_block[count] = fd;
+                count++;
+            }
         }
     }
-    // lseek(fd, BLOCK_OFFSET(group->bg_inode_table) + sizeof(struct ext2_inode), SEEK_SET);
-    // read(fd, &inode, sizeof(struct ext2_inode));
-    // printf("\nThe size of the innode is %d\n", inode.i_size);
-    // printf("Reading inode\n"
-    //        "Size     : %u bytes\n"
-    //        "Blocks   : %u\n",
-    //        inode.i_size,
-    //        inode.i_blocks); // in number of sectors. A disk sector is 512 bytes.
-    // for (i = 0; i < 15; i++)
-    // {
-    //     if (i < 12) // direct blocks
-    //         printf("Block %2u : %u\n", i, inode.i_block[i]);
-    //     else if (i == 12) // single indirect block
-    //         printf("Single   : %u\n", inode.i_block[i]);
-    //     else if (i == 13) // double indirect block
-    //         printf("Double   : %u\n", inode.i_block[i]);
-    //     else if (i == 14) // triple indirect block
-    //         printf("Triple   : %u\n", inode.i_block[i]);
-    // }
 
-    close(fd);
+    printf("################################################\n");
+    for (i = 0; i < count; i++)
+    {
+        int group_no = j / num_inodes_per_group;
+        lseek(fd, BLOCK_OFFSET(group[0].bg_inode_table) + (sizeof(struct ext2_inode) * inodes[i]), SEEK_SET);
+        read(fd, &inode, sizeof(struct ext2_inode));
+        printf("%u  %u  %u  \n", inodes[i], block[i], inode.i_block[block[i]]);
+    }
+        close(fd);
+
 
     return 0;
 }
-
-// static void read_inode(int fd, const struct ext2_group_desc *group, int inode_no,
-//                        struct ext2_inode *inode)
-// {
-//     int group_no = inode_no / num_inodes_per_group;
-//     //printf("group #%d; table %d\n",group_no,group[group_no].bg_inode_table);
-//     lseek(fd, BLOCK_OFFSET(group[group_no].bg_inode_table) + (inode_no - group_no * num_inodes_per_group - 1) * sizeof(struct ext2_inode), SEEK_SET);
-//     read(fd, inode, sizeof(struct ext2_inode));
-//     printf("\nThe size of the innode is %d\n", inode->i_size);
-//     printf("Reading inode\n"
-//            "Size     : %u bytes\n"
-//            "Blocks   : %u\n",
-//            inode->i_size,
-//            inode->i_blocks); // in number of sectors. A disk sector is 512 bytes.
-//     int i;
-//     for (i = 0; i < 15; i++)
-//     {
-//         if (i < 12) // direct blocks
-//             printf("Block %2u : %u\n", i, inode->i_block[i]);
-//         else if (i == 12) // single indirect block
-//             printf("Single   : %u\n", inode->i_block[i]);
-//         else if (i == 13) // double indirect block
-//             printf("Double   : %u\n", inode->i_block[i]);
-//         else if (i == 14) // triple indirect block
-//             printf("Triple   : %u\n", inode->i_block[i]);
-//     }
-// } // end of read_inode()
