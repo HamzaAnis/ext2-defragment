@@ -1,2 +1,2 @@
-all: ; dd if=/dev/zero of=image.img bs=4096 count=128; mke2fs -N 32 image.img; mkdir mnt; sudo mount -o loop image.img mnt; gcc -o defragext2 main.c; ./defragext2 image.img;
-clear: ; sudo umount mnt; rmdir mnt; rm image.img; rm defragext2;
+all: ; mkdir mnt; sudo mount -o loop image.img mnt; gcc -o defragext2 main.c; ./defragext2 image.img;
+clear: ; sudo umount mnt; rm defragext2;
