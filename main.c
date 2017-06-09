@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    // read super-block
+    // read super-block to the 
     lseek(fd, BASE_OFFSET, SEEK_SET);
     read(fd, &super, sizeof(super));
     if (super.s_magic != EXT2_SUPER_MAGIC)
@@ -52,6 +52,8 @@ int main(int argc, char *argv[])
            argv[1], super.s_blocks_count,
            super.s_first_ino);
 
+
+           printf("The number of nodes are %d\n", super.s_inodes_count);
     // read group descriptor
     lseek(fd, BASE_OFFSET + block_size, SEEK_SET);
     read(fd, &group, sizeof(group));
@@ -84,13 +86,15 @@ int main(int argc, char *argv[])
 
     int j;
     // read root inode
-    for (j = 1; j < 4; j++)
+    for (j = 1; j < 5; j++)
     {
         struct ext2_inode inode;
+
 
         printf("\t\tIt is if the %d in node\n\n", j);
         lseek(fd, BLOCK_OFFSET(group.bg_inode_table) + sizeof(struct ext2_inode) * j, SEEK_SET);
         read(fd, &inode, sizeof(struct ext2_inode));
+                printf("The size of the innode is %d\n",inode.i_size);
         printf("Reading %d inode\n"
                "Size     : %u bytes\n"
                "Blocks   : %u\n",
