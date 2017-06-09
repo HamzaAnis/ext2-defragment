@@ -1,2 +1,2 @@
-all: ; dd if=/dev/zero of=image1.img bs=1024 count=128; echo "Hamza";
-run: ; echo "it is is";
+all: ; dd if=/dev/zero of=image.img bs=1024 count=128; mke2fs -N 32 image.img; mkdir mnt; sudo mount -o loop image.img mnt; gcc -o defragext2 main.c;
+clear: ; sudo umount mnt; rmdir mnt; rm image.img; rm defragext2;
