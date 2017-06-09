@@ -186,9 +186,8 @@ int main(int argc, char *argv[])
         int group_no = j / num_inodes_per_group;
         lseek(fd, BLOCK_OFFSET(group[0].bg_inode_table) + (sizeof(struct ext2_inode) * inodes[i]), SEEK_SET);
         read(fd, &inode, sizeof(struct ext2_inode));
-        printf("%u %u %u \n", inodes[i] + 1, inodeValuesfrag[i]->i_block[block[i]], block_a[i]);
+        printf("%u %u\n", inodes[i] + 1, block_a[i]);
     }
     close(fd);
-
     return 0;
 }
