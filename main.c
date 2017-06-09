@@ -20,9 +20,18 @@ typedef unsigned char bmap;
 unsigned int block_size = 0;
 static unsigned int num_inodes_per_group = 0; // to be read in
 #define BLOCK_OFFSET(block) (BASE_OFFSET + (block - 1) * block_size)
+// void moveBlocks(int,int);
 
 // static void read_inode(int, const struct ext2_group_desc *, int,
 //                        struct ext2_inode *);
+
+void moveBlocks(int *xp, int *yp)
+{
+    int a = *xp;
+    *xp = *yp;
+    *yp = a;
+}
+
 int main(int argc, char *argv[])
 {
     struct ext2_super_block super;
@@ -110,9 +119,10 @@ int main(int argc, char *argv[])
     int block[super.s_inodes_count * 15];
     struct ext2_inode *inodeValuesfrag[super.s_inodes_count * 15];
     int fd_block[super.s_inodes_count * 15];
+    int block_a[super.s_inodes_count * 15];
 
     struct ext2_inode inode;
-    int j;
+    int j, temp;
     int count = 0;
     printf("The number of nodes per group is %u and size of each node is %u\n\n", super.s_inodes_per_group, super.s_inode_size);
     for (j = 11; j < super.s_inodes_count; j++)
@@ -145,18 +155,38 @@ int main(int argc, char *argv[])
                 block[count] = i;  // the  block in the inode
                 inodeValuesfrag[count] = &inode;
                 fd_block[count] = fd;
+                block_a[count] = inode.i_block[i];
                 count++;
             }
         }
     }
-
+    for (i = 0; i < count - 1; i++)
+        for (j = 0; j < count - i - 1; j++)
+        {
+            if (inodeValuesfrag[i]->i_block[block[j]] > inodeValuesfrag[i]->i_block[block[j + 1]])
+            {
+                int group_no = j / num_inodes_per_group;
+                lseek(fd, BLOCK_OFFSET(group[0].bg_inode_table) + (sizeof(struct ext2_inode) * inodes[i]), SEEK_SET);
+                read(fd, &inode, sizeof(struct ext2_inode));
+                moveBlocks(&inodeValuesfrag[i]->i_block[block[j]], &inodeValuesfrag[i]->i_block[block[j + 1]]);
+            }
+        }
+    for (i = 0; i < count - 1; i++)
+        for (j = 0; j < count - i - 1; j++)
+        {
+            if (block_a[j] > block_a[j + 1])
+            {
+                moveBlocks(&block_a[j], &block_a[j + 1]);
+            }
+        }
     printf("################################################\n");
+
     for (i = 0; i < count; i++)
     {
         int group_no = j / num_inodes_per_group;
         lseek(fd, BLOCK_OFFSET(group[0].bg_inode_table) + (sizeof(struct ext2_inode) * inodes[i]), SEEK_SET);
         read(fd, &inode, sizeof(struct ext2_inode));
-        printf("%u %u \n", inodes[i]+1, inodeValuesfrag[i]->i_block[block[i]]);
+        printf("%u %u %u \n", inodes[i] + 1, inodeValuesfrag[i]->i_block[block[i]], block_a[i]);
     }
     close(fd);
 
