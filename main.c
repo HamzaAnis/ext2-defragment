@@ -18,12 +18,15 @@ typedef unsigned char bmap;
 #define BM_ISSET(d, set) ((set[__BMELT(d)] & __BMMASK(d)) != 0)
 
 unsigned int block_size = 0;
+static unsigned int num_inodes_per_group = 0; // to be read in
 #define BLOCK_OFFSET(block) (BASE_OFFSET + (block - 1) * block_size)
 
+static void read_inode(int, const struct ext2_group_desc *, int,
+                       struct ext2_inode *);
 int main(int argc, char *argv[])
 {
     struct ext2_super_block super;
-    struct ext2_group_desc group;
+    struct ext2_group_desc *group;
     int fd, i;
     if (argc < 2)
     {
@@ -36,7 +39,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    // read super-block to the 
+    // read super-block to the
     lseek(fd, BASE_OFFSET, SEEK_SET);
     read(fd, &super, sizeof(super));
     if (super.s_magic != EXT2_SUPER_MAGIC)
@@ -45,23 +48,43 @@ int main(int argc, char *argv[])
         exit(1);
     }
     block_size = 1024 << super.s_log_block_size;
+    num_inodes_per_group = super.s_inodes_per_group;
 
-    printf("Reading from image file %s:\n"
+    int num_groups = (super.s_blocks_count + super.s_blocks_per_group - 1) / super.s_blocks_per_group;
+
+    if ((group = (struct ext2_group_desc *)
+             malloc(num_groups * sizeof(struct ext2_group_desc))) == NULL)
+    {
+        fprintf(stderr, "Memory error\n");
+        close(fd);
+        exit(1);
+    }
+    for (i = 0; i < num_groups; i++)
+    {
+        printf("Reading group # %u\n",i);
+        lseek(fd, BASE_OFFSET + block_size + i * sizeof(struct ext2_group_desc), SEEK_SET);
+        read(fd, group + i, sizeof(struct ext2_group_desc));
+    }
+
+    printf("\nReading from image file %s:\n"
            "Blocks count            : %u\n"
-           "First non-reserved inode: %u\n",
+           "First non-reserved inode: %u\n"
+           "Inode count %u\n"
+           "Free Inode count %u\n"
+           "The number of groups are: %u\n\n",
            argv[1], super.s_blocks_count,
-           super.s_first_ino);
+           super.s_first_ino, super.s_inodes_count, super.s_free_inodes_count, num_groups);
 
 
-           printf("The number of nodes are %d\n", super.s_inodes_count);
+
     // read group descriptor
     lseek(fd, BASE_OFFSET + block_size, SEEK_SET);
-    read(fd, &group, sizeof(group));
+    read(fd, group, sizeof(group));
 
     // read block bitmap
     bmap *bitmap;
     bitmap = malloc(block_size);
-    lseek(fd, BLOCK_OFFSET(group.bg_block_bitmap), SEEK_SET);
+    lseek(fd, BLOCK_OFFSET(group->bg_block_bitmap), SEEK_SET);
     read(fd, bitmap, block_size);
     int fr = 0;
     int nfr = 0;
@@ -79,41 +102,47 @@ int main(int argc, char *argv[])
             fr++;
         }
     }
+    
     printf("\nFree blocks count       : %u\n"
            "Non-Free block count    : %u\n",
            fr, nfr);
     free(bitmap);
 
-    int j;
-    // read root inode
-    for (j = 1; j < 5; j++)
+
+
+    struct ext2_inode inode;
+
+    lseek(fd, BLOCK_OFFSET(group->bg_inode_table) + sizeof(struct ext2_inode), SEEK_SET);
+    read(fd, &inode, sizeof(struct ext2_inode));
+    printf("\nThe size of the innode is %d\n", inode.i_size);
+    printf("Reading inode\n"
+           "Size     : %u bytes\n"
+           "Blocks   : %u\n",
+           inode.i_size,
+           inode.i_blocks); // in number of sectors. A disk sector is 512 bytes.
+    for (i = 0; i < 15; i++)
     {
-        struct ext2_inode inode;
-
-
-        printf("\t\tIt is if the %d in node\n\n", j);
-        lseek(fd, BLOCK_OFFSET(group.bg_inode_table) + sizeof(struct ext2_inode) * j, SEEK_SET);
-        read(fd, &inode, sizeof(struct ext2_inode));
-                printf("The size of the innode is %d\n",inode.i_size);
-        printf("Reading %d inode\n"
-               "Size     : %u bytes\n"
-               "Blocks   : %u\n",
-               j,
-               inode.i_size,
-               inode.i_blocks); // in number of sectors. A disk sector is 512 bytes.
-        for (i = 0; i < 15; i++)
-        {
-            if (i < 12) // direct blocks
-                printf("Block %2u : %u\n", i, inode.i_block[i]);
-            else if (i == 12) // single indirect block
-                printf("Single   : %u\n", inode.i_block[i]);
-            else if (i == 13) // double indirect block
-                printf("Double   : %u\n", inode.i_block[i]);
-            else if (i == 14) // triple indirect block
-                printf("Triple   : %u\n", inode.i_block[i]);
-        }
+        if (i < 12) // direct blocks
+            printf("Block %2u : %u\n", i, inode.i_block[i]);
+        else if (i == 12) // single indirect block
+            printf("Single   : %u\n", inode.i_block[i]);
+        else if (i == 13) // double indirect block
+            printf("Double   : %u\n", inode.i_block[i]);
+        else if (i == 14) // triple indirect block
+            printf("Triple   : %u\n", inode.i_block[i]);
     }
 
     close(fd);
+    read_inode(fd, group, 2, &inode); // read inode 2 (root directory)
+
     return 0;
 }
+
+static void read_inode(int fd, const struct ext2_group_desc *group, int inode_no,
+                       struct ext2_inode *inode)
+{
+    int group_no = inode_no / num_inodes_per_group;
+    //printf("group #%d; table %d\n",group_no,group[group_no].bg_inode_table);
+    lseek(fd, BLOCK_OFFSET(group[group_no].bg_inode_table) + (inode_no - group_no * num_inodes_per_group - 1) * sizeof(struct ext2_inode), SEEK_SET);
+    read(fd, inode, sizeof(struct ext2_inode));
+} // end of read_inode()
